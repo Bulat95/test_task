@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
-    Customer findByShipToCode(Integer shipToCode);
+    Customer findByCH3ShipToCode(Integer ch3ShipToCode);
 }

@@ -218,7 +218,7 @@ public class ExcelParser {
                 Actual actual = ReflectionMapper.toEntity(actualDto, Actual.class);
 
                 // Получаем данные о клиенте для определения сети
-                Customer customer = customerRepository.findByShipToCode(actual.getCH3_Ship_To_Code());
+                Customer customer = customerRepository.findByCH3ShipToCode(actual.getCH3_Ship_To_Code());
                 if (customer != null) {
                     // Устанавливаем связь
                     actual.setCustomer(customer);

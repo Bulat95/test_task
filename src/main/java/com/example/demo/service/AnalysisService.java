@@ -12,6 +12,7 @@ import java.math.RoundingMode;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,30 +23,26 @@ public class AnalysisService {
     private ActualRepository actualRepository;
 
     public Map<String, Object> getSalesByPromoFlag(List<String> chainNames, List<String> productNames) {
-        List<ActualDto> actuals = actualRepository.findByChainNamesAndProductNames(chainNames, productNames)
-                .stream()
-                .map(x -> ReflectionMapper.toDto(x, ActualDto.class)).toList();
+        List<Actual> actuals = actualRepository.findByChainNamesAndProductNames(chainNames, productNames);
 
-        List<ActualDto> regularSales = actuals.stream()
-                .map(x -> ReflectionMapper.toDto(x, ActualDto.class))
+        List<Actual> regularSales = actuals.stream()
                 .filter(a -> "Regular".equals(a.getPromoFlag()))
-                .toList();
+                .collect(Collectors.toList());
 
-        List<ActualDto> promoSales = actuals.stream()
-                .map(x -> ReflectionMapper.toDto(x, ActualDto.class))
+        List<Actual> promoSales = actuals.stream()
                 .filter(a -> "Promo".equals(a.getPromoFlag()))
-                .toList();
+                .collect(Collectors.toList());
 
-        Integer totalRegularUnits = regularSales.stream().mapToInt(ActualDto::getVolume_units).sum();
-        Integer totalPromoUnits = promoSales.stream().mapToInt(ActualDto::getVolume_units).sum();
+        Integer totalRegularUnits = regularSales.stream().mapToInt(Actual::getVolume_units).sum();
+        Integer totalPromoUnits = promoSales.stream().mapToInt(Actual::getVolume_units).sum();
         Integer totalUnits = totalRegularUnits + totalPromoUnits;
 
         BigDecimal totalRegularValue = regularSales.stream()
-                .map(ActualDto::getActual_Sales_Value)
+                .map(Actual::getActual_Sales_Value)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalPromoValue = promoSales.stream()
-                .map(ActualDto::getActual_Sales_Value)
+                .map(Actual::getActual_Sales_Value)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalValue = totalRegularValue.add(totalPromoValue);
@@ -60,6 +57,7 @@ public class AnalysisService {
 
         Map<String, Object> result = new HashMap<>();
 
+        // Собираем справочные поля
         Set<String> chains = actuals.stream()
                 .map(a -> a.getCustomer().getChain_name())
                 .collect(Collectors.toSet());
@@ -68,49 +66,89 @@ public class AnalysisService {
                 .map(a -> a.getProduct().getL3_Product_Category_Name())
                 .collect(Collectors.toSet());
 
+        // Собираем информацию по месяцам
+        Map<String, Map<String, Object>> salesByMonth = actuals.stream()
+                .collect(Collectors.groupingBy(a -> {
+                    YearMonth yearMonth = YearMonth.from(a.getDate().toLocalDate());
+                    return yearMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+                }))
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> {
+                            List<Actual> monthSales = entry.getValue();
+                            Map<String, Object> monthData = new HashMap<>();
+
+                            List<Actual> monthRegularSales = monthSales.stream()
+                                    .filter(a -> "Regular".equals(a.getPromoFlag()))
+                                    .collect(Collectors.toList());
+                            List<Actual> monthPromoSales = monthSales.stream()
+                                    .filter(a -> "Promo".equals(a.getPromoFlag()))
+                                    .collect(Collectors.toList());
+
+                            Integer monthRegularUnits = monthRegularSales.stream().mapToInt(Actual::getVolume_units).sum();
+                            Integer monthPromoUnits = monthPromoSales.stream().mapToInt(Actual::getVolume_units).sum();
+
+                            BigDecimal monthRegularValue = monthRegularSales.stream()
+                                    .map(Actual::getActual_Sales_Value)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                            BigDecimal monthPromoValue = monthPromoSales.stream()
+                                    .map(Actual::getActual_Sales_Value)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                            monthData.put("regularUnits", monthRegularUnits);
+                            monthData.put("promoUnits", monthPromoUnits);
+                            monthData.put("regularValue", monthRegularValue);
+                            monthData.put("promoValue", monthPromoValue);
+
+                            return monthData;
+                        }
+                ));
+
+        // Добавляем все данные в результат
         result.put("chains", chains);
         result.put("categories", categories);
         result.put("regularSalesUnits", totalRegularUnits);
         result.put("promoSalesUnits", totalPromoUnits);
         result.put("regularSalesValue", totalRegularValue);
         result.put("promoSalesValue", totalPromoValue);
-        result.put("promoShareValue", promoShareValue);
-        result.put("promoShareUnits", promoShareUnits);
+        result.put("promoShareValuePercent", promoShareValue);
+        result.put("promoShareUnitsPercent", promoShareUnits);
+        result.put("salesByMonth", salesByMonth);
 
         return result;
     }
 
-    public Map<String, Object> getSalesByDateRange(Date startDate, Date endDate) {
-        List<Actual> actuals = actualRepository.findByDateRange(startDate, endDate);
+    public Map<String, Object> getSalesByDateRange(Date startDate, Date endDate, List<String> chainNames, List<String> productNames) {
+        List<Actual> actuals = actualRepository.findByDateRangeAndChainsAndProducts(startDate, endDate, chainNames, productNames);
 
-        Map<YearMonth, List<Actual>> salesByMonth = actuals.stream()
-                .collect(Collectors.groupingBy(a ->
-                        YearMonth.from(a.getDate().toLocalDate())));
+        Map<String, List<Actual>> salesByDay = actuals.stream()
+                .collect(Collectors.groupingBy(a -> a.getDate().toString()));
 
         Map<String, Object> result = new HashMap<>();
 
-        for (Map.Entry<YearMonth, List<Actual>> entry : salesByMonth.entrySet()) {
-            Map<String, Object> monthData = new HashMap<>();
-            List<Actual> monthSales = entry.getValue();
+        for (Map.Entry<String, List<Actual>> entry : salesByDay.entrySet()) {
+            Map<String, Object> dayData = new HashMap<>();
+            List<Actual> daySales = entry.getValue();
 
-            List<Actual> regularSales = monthSales.stream()
+            List<Actual> regularSales = daySales.stream()
                     .filter(a -> "Regular".equals(a.getPromoFlag()))
                     .collect(Collectors.toList());
 
-            List<Actual> promoSales = monthSales.stream()
+            List<Actual> promoSales = daySales.stream()
                     .filter(a -> "Promo".equals(a.getPromoFlag()))
                     .collect(Collectors.toList());
 
-            monthData.put("regularSalesUnits", regularSales.stream().mapToInt(Actual::getVolume_units).sum());
-            monthData.put("promoSalesUnits", promoSales.stream().mapToInt(Actual::getVolume_units).sum());
-            monthData.put("regularSalesValue", regularSales.stream()
+            dayData.put("regularSalesUnits", regularSales.stream().mapToInt(Actual::getVolume_units).sum());
+            dayData.put("promoSalesUnits", promoSales.stream().mapToInt(Actual::getVolume_units).sum());
+            dayData.put("regularSalesValue", regularSales.stream()
                     .map(Actual::getActual_Sales_Value)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
-            monthData.put("promoSalesValue", promoSales.stream()
+            dayData.put("promoSalesValue", promoSales.stream()
                     .map(Actual::getActual_Sales_Value)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
 
-            result.put(entry.getKey().toString(), monthData);
+            result.put(entry.getKey(), dayData);
         }
 
         return result;

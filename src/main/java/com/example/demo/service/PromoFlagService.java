@@ -16,7 +16,7 @@ public class PromoFlagService {
     private PriceRepository priceRepository;
 
     public String determinePromoFlag(Actual actual, String chainName, Integer materialNo) {
-        Price price = priceRepository.findByChain_nameAndMaterial_No(chainName, materialNo);
+        Price price = priceRepository.findByChainAndMaterial(chainName, materialNo);
 
         if (price == null || actual.getVolume_units() == null || actual.getVolume_units() == 0) {
             return "Regular";

@@ -26,7 +26,9 @@ public class AnalysisController {
     @GetMapping("/sales/byDate")
     public Map<String, Object> getSalesByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date endDate) {
-        return analysisService.getSalesByDateRange(startDate, endDate);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date endDate,
+            @RequestParam(required = false) List<String> chainNames,
+            @RequestParam(required = false) List<String> productNames) {
+        return analysisService.getSalesByDateRange(startDate, endDate, chainNames, productNames);
     }
 }
