@@ -6,10 +6,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface PriceRepository extends JpaRepository<Price, Long> {
+
     @Query("SELECT p FROM Price p WHERE p.Chain_name = :chainName AND p.Material_No = :materialNo")
     Price findByChainAndMaterial(
             @Param("chainName") String chainName,
             @Param("materialNo") Integer materialNo);
+
+    @Query("SELECT p FROM Price p WHERE p.Chain_name = :chainName")
+    List<Price> findByChainName(@Param("chainName") String chainName);
 }
