@@ -35,6 +35,7 @@ public class ExcelParser {
     private final ActualRepository actualRepository;
     private final ProductRepository productRepository;
     private final CustomerRepository customerRepository;
+    private final PromoFlagService promoFlagService;
 
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -42,11 +43,12 @@ public class ExcelParser {
     public ExcelParser(PriceRepository priceRepository,
                        ActualRepository actualRepository,
                        ProductRepository productRepository,
-                       CustomerRepository customerRepository) {
+                       CustomerRepository customerRepository, PromoFlagService promoFlagService) {
         this.priceRepository = priceRepository;
         this.actualRepository = actualRepository;
         this.productRepository = productRepository;
         this.customerRepository = customerRepository;
+        this.promoFlagService = promoFlagService;
     }
     
     @PostConstruct
@@ -214,6 +216,28 @@ public class ExcelParser {
                 actualDto.setActual_Sales_Value(actualDtosValue);
 
                 Actual actual = ReflectionMapper.toEntity(actualDto, Actual.class);
+
+                // Получаем данные о клиенте для определения сети
+                Customer customer = customerRepository.findByShipToCode(actual.getCH3_Ship_To_Code());
+                if (customer != null) {
+                    // Устанавливаем связь
+                    actual.setCustomer(customer);
+
+                    // Определяем признак промо
+                    String promoFlag = promoFlagService.determinePromoFlag(
+                            actual,
+                            customer.getChain_name(),
+                            actual.getMaterial_No()
+                    );
+                    actual.setPromoFlag(promoFlag);
+                }
+
+                // Устанавливаем связь с продуктом
+                Product product = productRepository.findByMaterialNo(actual.getMaterial_No());
+                if (product != null) {
+                    actual.setProduct(product);
+                }
+
                 actualRepository.save(actual);
 
             } catch (Exception e) {

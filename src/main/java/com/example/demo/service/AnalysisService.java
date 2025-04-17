@@ -100,7 +100,7 @@ public class AnalysisService {
             List<Actual> promoSales = monthSales.stream()
                     .filter(a -> "Promo".equals(a.getPromoFlag()))
                     .collect(Collectors.toList());
-            
+
             monthData.put("regularSalesUnits", regularSales.stream().mapToInt(Actual::getVolume_units).sum());
             monthData.put("promoSalesUnits", promoSales.stream().mapToInt(Actual::getVolume_units).sum());
             monthData.put("regularSalesValue", regularSales.stream()
